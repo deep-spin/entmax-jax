@@ -16,6 +16,6 @@ setuptools.setup(
     url="https://github.com/deep-spin/entmax",
     packages=setuptools.find_packages(),
     install_requires=["jax>=0.1.75"],
-    extras_requires={"dev": ["jaxlib", "pytest", "flake8", "black"]},
+    extras_require={"dev": ["jaxlib", "pytest", "flake8", "black"]},
     python_requires=">=3.6",
 )
