@@ -34,10 +34,10 @@ def _entmax(x, alpha, axis, n_iter):
         thres_l = jnp.where(z >= 1, threshold, thres_l)
         return thres_l
 
-    # threshold = lax.fori_loop(1, n_iter + 1, loop_body, thres_l)
-    threshold = thres_l
-    for i in range(1, n_iter + 1):
-        threshold = loop_body(i, threshold)
+    threshold = lax.fori_loop(1, n_iter + 1, loop_body, thres_l)
+    # threshold = thres_l
+    # for i in range(1, n_iter + 1):
+    #     threshold = loop_body(i, threshold)
     p = jnp.maximum(x - threshold, 0) ** (1 / (alpha - 1))
     return p / jnp.sum(p, axis=axis, keepdims=True)
 
@@ -88,8 +88,7 @@ def entmax(
     return _entmax(x, alpha, axis, n_iter)
 
 
-# TODO: check if automatic jvp is efficient
-# if not might be useful to manually define the JVP
+@partial(jax.custom_jvp, nondiff_argnums=(1,))
 @partial(jax.jit, static_argnums=1)
 def _sparsemax(x, axis):
     # get indices of elements in the right axis
@@ -105,6 +104,21 @@ def _sparsemax(x, axis):
     # calculate threshold and project to simplex
     threshold = (jnp.take_along_axis(cum, k - 1, axis=axis) - 1) / k
     return jnp.maximum(x - threshold, 0)
+
+
+@_sparsemax.defjvp
+@partial(jax.jit, static_argnums=(0,))
+def _sparsemax_jvp(axis, primals, tangents):
+    x = primals[0]
+    dx = tangents[0]
+
+    p = _sparsemax(x, axis)
+    s = jnp.where(p > 0, 1, 0)
+
+    dy = dx * s
+    g = jnp.sum(dy, axis=axis) / jnp.sum(s, axis=axis)
+    dy = dy - jnp.expand_dims(g, axis) * s
+    return p, dy
 
 
 def sparsemax(x: jnp.array, axis: int = -1):
@@ -128,8 +142,7 @@ def sparsemax(x: jnp.array, axis: int = -1):
     return _sparsemax(x, axis)
 
 
-# TODO: check if automatic jvp is efficient
-# if not might be useful to manually define the JVP
+@partial(jax.custom_jvp, nondiff_argnums=(1,))
 @partial(jax.jit, static_argnums=1)
 def _entmax15(x, axis):
     x = x / 2
@@ -145,12 +158,30 @@ def _entmax15(x, axis):
     cum_x_sq = jnp.cumsum(sorted_x ** 2, axis=axis)
     mean = cum_x / idxs
     var = cum_x_sq - (mean ** 2) * idxs
-    thresholds = mean - jnp.sqrt((1 - var) / idxs)
+    delta = (1 - var) / idxs
+    delta = jnp.maximum(delta, 0) # TODO: understand why we need this
+    thresholds = mean - jnp.sqrt(delta)
     k = jnp.sum(jnp.where(thresholds <= sorted_x, 1, 0), axis=axis, keepdims=True)
 
     # calculate threshold and project to simplex
     threshold = jnp.take_along_axis(thresholds, k - 1, axis=axis)
     return jnp.maximum(x - threshold, 0) ** 2
+
+
+@_entmax15.defjvp
+@partial(jax.jit, static_argnums=(0,))
+def _entmax15_jvp(axis, primals, tangents):
+    x = primals[0]
+    dx = tangents[0]
+
+    p = _entmax15(x, axis)
+    s = jnp.sqrt(p)
+
+    dy = dx * s
+    g = jnp.sum(dy, axis=axis) / jnp.sum(s, axis=axis)
+    dy = dy - jnp.expand_dims(g, axis) * s
+    return p, dy
+
 
 
 def entmax15(x: jnp.array, axis: int = -1):
