@@ -159,7 +159,7 @@ def _entmax15(x, axis):
     mean = cum_x / idxs
     var = cum_x_sq - (mean ** 2) * idxs
     delta = (1 - var) / idxs
-    delta = jnp.maximum(delta, 0) # TODO: understand why we need this
+    delta = jnp.maximum(delta, 0)  # TODO: understand why we need this
     thresholds = mean - jnp.sqrt(delta)
     k = jnp.sum(jnp.where(thresholds <= sorted_x, 1, 0), axis=axis, keepdims=True)
 
@@ -181,7 +181,6 @@ def _entmax15_jvp(axis, primals, tangents):
     g = jnp.sum(dy, axis=axis) / jnp.sum(s, axis=axis)
     dy = dy - jnp.expand_dims(g, axis) * s
     return p, dy
-
 
 
 def entmax15(x: jnp.array, axis: int = -1):
