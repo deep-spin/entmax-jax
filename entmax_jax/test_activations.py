@@ -35,7 +35,8 @@ def test_entmax_axis(x, axis, alpha=1.5, n_iter=50):
 
 
 @pytest.mark.parametrize(
-    "x,jac,alpha", [([0, 1, 1.5], [[0, 0, 0], [0, 0.5, -0.5], [0, -0.5, 0.5]], 2)],
+    "x,jac,alpha",
+    [([0, 1, 1.5], [[0, 0, 0], [0, 0.5, -0.5], [0, -0.5, 0.5]], 2)],
 )
 @pytest.mark.parametrize("n_iter", [20, 50])
 def test_entmax_jacobian(x, jac, alpha, n_iter):
@@ -61,3 +62,6 @@ def test_entmax15(x):
     y_en15 = entmax15(x)
     y_en = entmax(x, alpha=1.5)
     assert jnp.all(jnp.isclose(y_en15, y_en))
+
+
+# FIXME: add tests for jacobians of sparsemax/entmax15
