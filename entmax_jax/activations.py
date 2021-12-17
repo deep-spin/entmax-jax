@@ -28,6 +28,7 @@ def _entmax(x, alpha, axis, n_iter):
 
     # define bisection loop body
     two_float = jnp.array(2, dtype=jnp.float32)
+
     def loop_body(i, thres_l):
         threshold = thres_l + delta / (two_float ** i)
         p = jnp.maximum(x - threshold, 0) ** (1 / (alpha - 1))
@@ -36,9 +37,9 @@ def _entmax(x, alpha, axis, n_iter):
         return thres_l
 
     threshold = lax.fori_loop(1, n_iter + 1, loop_body, thres_l)
-    #threshold = thres_l
-    #for i in range(1, n_iter + 1):
-    #    threshold = loop_body(i, threshold)
+    # threshold = thres_l
+    # for i in range(1, n_iter + 1):
+    #     threshold = loop_body(i, threshold)
     p = jnp.maximum(x - threshold, 0) ** (1 / (alpha - 1))
     return p / jnp.sum(p, axis=axis, keepdims=True)
 
