@@ -130,6 +130,7 @@ def sparsemax(x: jnp.array, axis: int = -1):
 
 # TODO: check if automatic jvp is efficient
 # if not might be useful to manually define the JVP
+@partial(jax.custom_jvp, nondiff_argnums=(1,))
 @partial(jax.jit, static_argnums=1)
 def _entmax15(x, axis):
     x = x / 2
@@ -145,12 +146,31 @@ def _entmax15(x, axis):
     cum_x_sq = jnp.cumsum(sorted_x ** 2, axis=axis)
     mean = cum_x / idxs
     var = cum_x_sq - (mean ** 2) * idxs
-    thresholds = mean - jnp.sqrt((1 - var) / idxs)
+    clamped_delta = jnp.maximum((1 - var) / idxs, 0)
+    thresholds = mean - jnp.sqrt(clamped_delta)
     k = jnp.sum(jnp.where(thresholds <= sorted_x, 1, 0), axis=axis, keepdims=True)
 
     # calculate threshold and project to simplex
     threshold = jnp.take_along_axis(thresholds, k - 1, axis=axis)
     return jnp.maximum(x - threshold, 0) ** 2
+
+
+@_entmax15.defjvp
+@partial(jax.jit, static_argnums=(0,))
+def _entmax15_vjp(axis, primals, tangents):
+    # unpack arguments
+    x = primals[0]
+    dx = tangents[0]
+
+    # calculate entmax p and auxiliary s
+    p = _entmax15(x, axis)
+    s = jnp.sqrt(p)
+
+    # jvp as simplified product with jacobian
+    dy = dx * s
+    g = jnp.sum(dy, axis=axis) / jnp.sum(s, axis=axis)
+    dy = dy - jnp.expand_dims(g, axis) * s
+    return p, dy
 
 
 def entmax15(x: jnp.array, axis: int = -1):
