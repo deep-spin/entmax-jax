@@ -164,8 +164,9 @@ def _entmax15(x, axis):
     cum_x_sq = jnp.cumsum(sorted_x ** 2, axis=axis)
     mean = cum_x / idxs
     var = cum_x_sq - (mean ** 2) * idxs
-    clamped_delta = jnp.maximum((1 - var) / idxs, 0)
-    thresholds = mean - jnp.sqrt(clamped_delta)
+    delta = (1 - var) / idxs
+    delta = jnp.maximum(delta, 0)  # TODO: understand why we need this
+    thresholds = mean - jnp.sqrt(delta)
     k = jnp.sum(jnp.where(thresholds <= sorted_x, 1, 0), axis=axis, keepdims=True)
 
     # calculate threshold and project to simplex
