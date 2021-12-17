@@ -27,17 +27,18 @@ def _entmax(x, alpha, axis, n_iter):
     delta = 1 - d ** (1 - alpha)
 
     # define bisection loop body
+    two_float = jnp.array(2, dtype=jnp.float32)
     def loop_body(i, thres_l):
-        threshold = thres_l + delta / (2 ** i)
+        threshold = thres_l + delta / (two_float ** i)
         p = jnp.maximum(x - threshold, 0) ** (1 / (alpha - 1))
         z = jnp.sum(p, axis=axis, keepdims=True)
         thres_l = jnp.where(z >= 1, threshold, thres_l)
         return thres_l
 
-    # threshold = lax.fori_loop(1, n_iter + 1, loop_body, thres_l)
-    threshold = thres_l
-    for i in range(1, n_iter + 1):
-        threshold = loop_body(i, threshold)
+    threshold = lax.fori_loop(1, n_iter + 1, loop_body, thres_l)
+    #threshold = thres_l
+    #for i in range(1, n_iter + 1):
+    #    threshold = loop_body(i, threshold)
     p = jnp.maximum(x - threshold, 0) ** (1 / (alpha - 1))
     return p / jnp.sum(p, axis=axis, keepdims=True)
 
@@ -88,9 +89,8 @@ def entmax(
     return _entmax(x, alpha, axis, n_iter)
 
 
-# TODO: check if automatic jvp is efficient
-# if not might be useful to manually define the JVP
-@partial(jax.jit, static_argnums=1)
+@partial(jax.custom_jvp, nondiff_argnums=(1,))
+@partial(jax.jit, static_argnums=(1,))
 def _sparsemax(x, axis):
     # get indices of elements in the right axis
     # and reshape to allow broadcasting to other dimensions
@@ -105,6 +105,24 @@ def _sparsemax(x, axis):
     # calculate threshold and project to simplex
     threshold = (jnp.take_along_axis(cum, k - 1, axis=axis) - 1) / k
     return jnp.maximum(x - threshold, 0)
+
+
+@_sparsemax.defjvp
+@partial(jax.jit, static_argnums=(0,))
+def _sparsemax_jvp(axis, primals, tangents):
+    # unpack arguments
+    x = primals[0]
+    dx = tangents[0]
+
+    # calculate entmax p and auxiliary s
+    p = _sparsemax(x, axis)
+    s = jnp.where(p > 0, 1, 0)
+
+    # jvp as simplified product with jacobian
+    dy = dx * s
+    g = jnp.sum(dy, axis=axis) / jnp.sum(s, axis=axis)
+    dy = dy - jnp.expand_dims(g, axis) * s
+    return p, dy
 
 
 def sparsemax(x: jnp.array, axis: int = -1):
@@ -131,7 +149,7 @@ def sparsemax(x: jnp.array, axis: int = -1):
 # TODO: check if automatic jvp is efficient
 # if not might be useful to manually define the JVP
 @partial(jax.custom_jvp, nondiff_argnums=(1,))
-@partial(jax.jit, static_argnums=1)
+@partial(jax.jit, static_argnums=(1,))
 def _entmax15(x, axis):
     x = x / 2
 
