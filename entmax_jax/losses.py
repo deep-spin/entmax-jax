@@ -17,9 +17,11 @@ def sparsemax_loss(predicted_probs, true_probs, reduction=jnp.mean):
 
 
 @jax.jit
-def softmax_loss(predicted_probs, true_probs, reduction=jnp.mean):
-    loss = jnp.sum(
-        multiply_no_nan(true_probs, logprobs(true_probs) - logprobs(predicted_probs)),
-        axis=1,
-    )
+def softmax_loss(predicted_probs, true_probs, mask=None, reduction=jnp.mean):
+    if mask is None:
+        mask = jnp.ones_like(predicted_probs)
+
+    pointwise_loss = multiply_no_nan(true_probs, logprobs(true_probs) - logprobs(predicted_probs))
+    pointwise_loss = pointwise_loss * mask.astype(jnp.float32)
+    loss = jnp.sum(pointwise_loss, axis=1)
     return reduction(loss)
